@@ -18,44 +18,21 @@ jobs:
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: 17
-          distribution: temurin
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          cmdline-tools-version: "11479570"
+          cmdline-tools-version: '11479570'
 
       - name: Generate project
         run: |
           mkdir -p app/src/main/java/com/demo
-
-          cat > settings.gradle.kts <<'EOT'
-include(":app")
-EOT
-
-          cat > build.gradle.kts <<'EOT'
-plugins {
-    id("com.android.application") version "8.7.2" apply false
-}
-EOT
-
-          cat > app/build.gradle.kts <<'EOT'
-plugins {
-    id("com.android.application")
-}
-android {
-    namespace = "com.demo"
-    compileSdk = 34
-    defaultConfig {
-        minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
-    }
-}
-EOT
-
+          echo 'include(":app")' > settings.gradle.kts
+          echo 'plugins { id("com.android.application") version "8.7.2" apply false }' > build.gradle.kts
+          echo 'plugins { id("com.android.application") }' > app/build.gradle.kts
+          echo 'android { namespace = "com.demo"; compileSdk = 34; defaultConfig { minSdk = 24; targetSdk = 34; versionCode = 1; versionName = "1.0" } }' >> app/build.gradle.kts
           apt update -y
           apt install -y wget unzip
           wget -q https://services.gradle.org/distributions/gradle-8.10-bin.zip
