@@ -22,42 +22,41 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
+        # 去掉冗余强制包，使用默认值先跑通
         with:
-          cmdline-tools-version: 15859902
-          accept-android-sdk-licenses: true
-          packages: "platform-tools,platforms;android-34,build-tools;34.0.0"
+          cmdline-tools-version: "15859902"
 
-      - name: 生成基础工程 + Gradle Wrapper
+      - name: 生成基础工程
         run: |
           mkdir -p app/src/main/java/com/demo
           echo 'include(":app")' > settings.gradle.kts
           cat > build.gradle.kts <<'EOF'
-          plugins {
-              id("com.android.application") version "8.7.2" apply false
-          }
-          EOF
+plugins {
+    id("com.android.application") version "8.7.2" apply false
+}
+EOF
           cat > app/build.gradle.kts <<'EOF'
-          plugins {
-              id("com.android.application")
-          }
-          android {
-              namespace = "com.demo"
-              compileSdk = 34
-              defaultConfig {
-                  minSdk = 24
-                  targetSdk = 34
-                  versionCode = 1
-                  versionName = "1.0"
-              }
-          }
-          EOF
+plugins {
+    id("com.android.application")
+}
+android {
+    namespace = "com.demo"
+    compileSdk = 34
+    defaultConfig {
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+    }
+}
+EOF
           apt update && apt install -y wget unzip
           wget -q https://services.gradle.org/distributions/gradle-8.10-bin.zip
           unzip -q gradle-8.10-bin.zip
           ./gradle-8.10/bin/gradle wrapper
           chmod +x gradlew
 
-      - name: 列出全部文件
+      - name: 列出文件
         run: ls -la
 
       - name: 构建
