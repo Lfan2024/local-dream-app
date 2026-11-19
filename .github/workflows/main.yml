@@ -21,39 +21,52 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Manual install Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install SDK packages
         run: |
-          export ANDROID_SDK_ROOT="$HOME/android-sdk"
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          cd "$ANDROID_SDK_ROOT/cmdline-tools"
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
-          unzip -q commandlinetools-linux-15859902_latest.zip
-          mv cmdline-tools latest
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --licenses
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "PATH=$PATH" >> $GITHUB_ENV
 
       - name: Generate project
         run: |
-          mkdir -p app/src/main/java/com/demo
-          echo 'include(":app")' > settings.gradle.kts
-          echo 'plugins { id("com.android.application") version "8.7.2" apply false }' > build.gradle.kts
-          echo 'plugins { id("com.android.application") }' > app/build.gradle.kts
-          echo 'android { namespace = "com.demo"; compileSdk = 34; defaultConfig { minSdk = 24; targetSdk = 34; versionCode = 1; versionName = "1.0" } }' >> app/build.gradle.kts
-          apt update -y
-          apt install -y wget unzip
-          wget -q https://services.gradle.org/distributions/gradle-8.10-bin.zip
-          unzip -q gradle-8.10-bin.zip
-          ./gradle-8.10/bin/gradle wrapper
-          chmod +x gradlew
+          python3 - <<'PY'
+          import os
+          os.makedirs("app/src/main/java/com/demo", exist_ok=True)
+          open("settings.gradle.kts","w").write('include(":app")\n')
+          open("build.gradle.kts","w").write(
+            'plugins {\n'
+            '    id("com.android.application") version "8.7.2" apply false\n'
+            '}\n'
+          )
+          open("app/build.gradle.kts","w").write(
+            'plugins {\n'
+            '    id("com.android.application")\n'
+            '}\n'
+            'android {\n'
+            '    namespace = "com.demo"\n'
+            '    compileSdk = 34\n'
+            '    defaultConfig {\n'
+            '        minSdk = 24\n'
+            '        targetSdk = 34\n'
+            '        versionCode = 1\n'
+            '        versionName = "1.0"\n'
+            '    }\n'
+            '}\n'
+          )
+          PY
 
       - name: List files
         run: ls -la
 
       - name: Build
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          gradle :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
