@@ -29,13 +29,18 @@ jobs:
       - name: Generate project
         run: |
           mkdir -p app/src/main/java/com/demo
-          echo 'include(":app")' > settings.gradle.kts
-          cat > build.gradle.kts <<'EOF'
+
+          cat > settings.gradle.kts <<'EOT'
+include(":app")
+EOT
+
+          cat > build.gradle.kts <<'EOT'
 plugins {
     id("com.android.application") version "8.7.2" apply false
 }
-EOF
-          cat > app/build.gradle.kts <<'EOF'
+EOT
+
+          cat > app/build.gradle.kts <<'EOT'
 plugins {
     id("com.android.application")
 }
@@ -49,7 +54,8 @@ android {
         versionName = "1.0"
     }
 }
-EOF
+EOT
+
           apt update -y
           apt install -y wget unzip
           wget -q https://services.gradle.org/distributions/gradle-8.10-bin.zip
