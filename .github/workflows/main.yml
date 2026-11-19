@@ -31,14 +31,12 @@ jobs:
           curl -sSLo cmdline.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
           unzip -q cmdline.zip
           mv cmdline-tools latest
-          ls latest/bin
 
       - name: Install SDK packages
         run: |
           export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          ls $ANDROID_SDK_ROOT/platforms
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -73,9 +71,20 @@ jobs:
           PY
 
       - name: Build
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+        run: |
+          gradle :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/b.log
+
+      - name: 抓错误
+        if: failure()
+        run: |
+          echo '#### 构建错误' >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          grep -n -A6 "What went wrong" /tmp/b.log | head -40 >> $GITHUB_STEP_SUMMARY || true
+          grep -n -E "FAILURE|Could not resolve|Could not find|error:" /tmp/b.log | head -20 >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
