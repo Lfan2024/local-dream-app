@@ -137,6 +137,29 @@ jobs:
           $GRADLE :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/b.log
 
       - name: 抓错误
-        if: failure()
-        run: |
-          echo '###
+         if: failure()
+         run: |
+           echo '#### 构建错误' >> $GITHUB_STEP_SUMMARY
+           echo '```text' >> $GITHUB_STEP_SUMMARY
+           grep -n -A6 "What went wrong" /tmp/b.log | head -30 >> $GITHUB_STEP_SUMMARY || true
+           grep -n -E "^e: " /tmp/b.log | head -10 | cut -c1-150 >> $GITHUB_STEP_SUMMARY || true
+           echo '```' >> $GITHUB_STEP_SUMMARY
+       - name: 收集APK
+         if: always()
+         run: |
+           mkdir -p out
+           find . -name "*.apk" -not -path "./.git/*" -exec cp {} out/ \;
+           ls -lh out >> $GITHUB_STEP_SUMMARY || true
+       - name: 上传
+         if: always()
+         uses: actions/upload-artifact@v4
+         with:
+           name: pf-apk
+           path: out/
+           if-no-files-found: warn
+       - name: 发Release
+         if: success()
+         uses: softprops/action-gh-release@v2
+         with:
+           tag_name: build-${{ github.run_number }}
+           files: out/*.apk
