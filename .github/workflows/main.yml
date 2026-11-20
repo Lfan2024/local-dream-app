@@ -38,12 +38,17 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
 
-      - name: 目录诊断
+      - name: 覆盖真源码
         run: |
-          echo '#### 仓库文件' >> $GITHUB_STEP_SUMMARY
-          echo '```text' >> $GITHUB_STEP_SUMMARY
-          find . -path ./.git -prune -o -type f -print | head -80 >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          rm -rf app/src/main/java/com/promptforge/app
+          mkdir -p app/src/main
+          curl -sSLo /tmp/pk.zip https://aka.doubaocdn.com/s/DcdM87LsyL
+          unzip -q -o /tmp/pk.zip -d /tmp/pk
+          cp -r /tmp/pk/main/* app/src/main/
+          cp -r /tmp/pk/cpp app/src/main/
+          cp -r /tmp/pk/assets app/src/main/
+          cp /tmp/pk/AndroidManifest.xml app/src/main/
+          ls -R app/src/main | head -30 >> $GITHUB_STEP_SUMMARY
 
       - name: 编译引擎
         run: |
@@ -63,33 +68,29 @@ jobs:
           echo "BUILD_EXIT=$?" >> /tmp/eng.log
           echo '#### 引擎日志' >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          grep -n -A6 "CMake Error" /tmp/eng.log | head -30 >> $GITHUB_STEP_SUMMARY || true
           grep -E "CLONE_EXIT=|CMAKE_EXIT=|BUILD_EXIT=" /tmp/eng.log >> $GITHUB_STEP_SUMMARY || true
           echo '```' >> $GITHUB_STEP_SUMMARY
 
-      - name: 编 JNI
+      - name: 链 JNI
         run: |
           set +e
           NDK=$ANDROID_SDK_ROOT/ndk/27.0.12077973
           CXX=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++
           STRIP=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
-          CPP=$(find . -name jni_bridge.cpp | head -1)
-          echo "CPP=$CPP" >> $GITHUB_STEP_SUMMARY
-          MAIN=$(dirname $(dirname $CPP))
-          OUT=$MAIN/jniLibs/arm64-v8a
+          OUT=app/src/main/jniLibs/arm64-v8a
           mkdir -p $OUT
           $CXX -shared -fPIC -O2 -std=c++17 -static-libstdc++ \
             -I/tmp/sd/include \
-            $CPP \
+            app/src/main/cpp/jni_bridge.cpp \
             /tmp/sd/build/libstable-diffusion.a \
             /tmp/sd/build/ggml/src/libggml.a \
             /tmp/sd/build/ggml/src/libggml-cpu.a \
             /tmp/sd/build/ggml/src/libggml-base.a \
             -o $OUT/libpfengine.so -llog -landroid -lm -lz > /tmp/jni.log 2>&1
           echo "JNI_EXIT=$?" >> $GITHUB_STEP_SUMMARY
-          grep -E "error|undefined" /tmp/jni.log | head -15 >> $GITHUB_STEP_SUMMARY || true
+          grep -E "error|undefined" /tmp/jni.log | head -10 >> $GITHUB_STEP_SUMMARY || true
           $STRIP --strip-unneeded $OUT/libpfengine.so || true
-          ls -lh $OUT >> $GITHUB_STEP_SUMMARY || true
+          ls -lh $OUT >> $GITHUB_STEP_SUMMARY
 
       - name: 写 Gradle 配置
         run: |
@@ -102,7 +103,6 @@ jobs:
               '    id("org.jetbrains.kotlin.android") version "2.0.21" apply false\n'
               '}\n'
           )
-          os.makedirs("app", exist_ok=True)
           open("app/build.gradle.kts","w").write(
               'plugins {\n'
               '    id("com.android.application")\n'
@@ -115,8 +115,8 @@ jobs:
               '        applicationId = "com.promptforge.app"\n'
               '        minSdk = 26\n'
               '        targetSdk = 34\n'
-              '        versionCode = 1\n'
-              '        versionName = "1.0"\n'
+              '        versionCode = 20\n'
+              '        versionName = "5.0"\n'
               '    }\n'
               '    compileOptions {\n'
               '        sourceCompatibility = JavaVersion.VERSION_17\n'
@@ -129,35 +129,21 @@ jobs:
               '    implementation("androidx.appcompat:appcompat:1.7.0")\n'
               '}\n'
           )
-          mf = "app/src/main/AndroidManifest.xml"
-          os.makedirs(os.path.dirname(mf), exist_ok=True)
-          if not os.path.exists(mf):
-              open(mf,"w").write(
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n'
-                  '    <application android:label="PromptForge">\n'
-                  '        <activity android:name=".MainActivity" android:exported="true">\n'
-                  '            <intent-filter>\n'
-                  '                <action android:name="android.intent.action.MAIN"/>\n'
-                  '                <category android:name="android.intent.category.LAUNCHER"/>\n'
-                  '            </intent-filter>\n'
-                  '        </activity>\n'
-                  '    </application>\n'
-                  '</manifest>\n'
-              )
           open("local.properties","w").write("sdk.dir=" + os.environ["ANDROID_SDK_ROOT"] + "\n")
-          for p in ["app/src/main/java/com/promptforge/app","app/src/main/cpp"]:
-              if os.path.isdir(p):
-                  print("OK", p, os.listdir(p))
           PY
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.10.2
+          cat app/build.gradle.kts >> $GITHUB_STEP_SUMMARY
 
       - name: Build
         run: |
-          gradle :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/b.log
+          set -o pipefail
+          GRADLE=$(command -v gradle || true)
+          if [ -z "$GRADLE" ]; then
+            curl -sSLo /tmp/g.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
+            unzip -q /tmp/g.zip -d /tmp
+            GRADLE=/tmp/gradle-8.10.2/bin/gradle
+          fi
+          echo "GRADLE=$GRADLE" >> $GITHUB_STEP_SUMMARY
+          $GRADLE :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/b.log
 
       - name: 抓错误
         if: failure()
@@ -165,10 +151,27 @@ jobs:
           echo '#### 构建错误' >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
           grep -n -A6 "What went wrong" /tmp/b.log | head -40 >> $GITHUB_STEP_SUMMARY || true
-          grep -n -E "^e: |error:|FAILURE" /tmp/b.log | head -15 | cut -c1-160 >> $GITHUB_STEP_SUMMARY || true
+          grep -n -E "^e: |error:" /tmp/b.log | head -15 | cut -c1-160 >> $GITHUB_STEP_SUMMARY || true
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: 收集APK
         if: always()
         run: |
-          mkdir -
+          mkdir -p out
+          find . -name "*.apk" -not -path "./.git/*" -exec cp {} out/ \;
+          ls -lh out >> $GITHUB_STEP_SUMMARY || true
+
+      - name: 上传APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pf-apk
+          path: out/
+          if-no-files-found: warn
+
+      - name: 发布APK
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          files: out/*.apk
