@@ -1,1 +1,73 @@
-$(cat /tmp/main.yml)
+name: Build PFNative
+
+permissions:
+  contents: write
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: /home/runner/android-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "17"
+          distribution: temurin
+      - name: cache-engine
+        uses: actions/cache@v4
+        with:
+          path: /tmp/sd/build
+          key: pfsd-linux-v3
+          restore-keys: |
+            pfsd-linux-
+      - name: build
+        run: |
+          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/ooqYOOsNTp
+          bash /tmp/b.sh
+      - name: report
+        if: always()
+        run: |
+          git config user.name ci
+          git config user.email ci@local
+          git checkout -B ci-report
+          mkdir -p ci
+          {
+            echo "run=${{ github.run_number }}"
+            echo "---- out ----"
+            ls -l out 2>/dev/null
+            echo "---- gradle ----"
+            grep -n -A8 "What went wrong" /tmp/b.log 2>/dev/null | head -40
+            grep -n -E "^e: |error:" /tmp/b.log 2>/dev/null | head -25
+            echo "---- jni ----"
+            tail -20 /tmp/jni.log 2>/dev/null
+          } > ci/last.txt
+          git add ci/last.txt
+          git commit -m "ci report ${{ github.run_number }}" || echo nothing-to-commit
+          git push -f origin ci-report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pf-apk
+          path: out/
+          if-no-files-found: warn
+      - uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Prompt Forge v5.3 (build ${{ github.run_number }})
+          body: |
+            Prompt Forge v5.3 · Android 本机出图版
+
+            - 引擎：sd.cpp 编成 libpfengine.so（cancel 签名已修）
+            - 模型库：单击卡片即可下载，卡内显示进度条 + 速度，下完标「已下载」
+            - 18+ / NSFW：合并为一个开关，默认隐藏，勾选后分类与出词都显示
+            - 已选提示词：单击选中，长按弹「修改文字 / 改权重 / 删除」
+            - 主题 7 套；紫粉渐变星形启动器图标
+            - 要求：Android 8.0+ / arm64-v8a
+          files: out/*.apk
+          fail_on_unmatched_files: true
