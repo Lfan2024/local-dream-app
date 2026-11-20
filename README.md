@@ -1,69 +1,43 @@
-# Prompt Forge（Android）
+# Prompt Forge
 
-> 单文件提示词工具的安卓封装版：在一个 App 里浏览 2400+ 标签、管理三套提示词体系、下载模型，并在手机上尝试本机出图。
+一个**单文件、离线可用**的 AI 绘图提示词工作台，并配有 Android 客户端的本机出图实验版。
+
+当前版本：**v5.2**（versionCode 22，包名 `com.promptforge.app`）
 
 ## 这是什么
 
-Prompt Forge 原本是一个单文件 HTML 工具（`assets/index.html`，约 1.0 MB），无需联网也无需后端，浏览器打开就能用。本仓库是它的安卓外壳，把网页装进 WebView，再通过 JS 桥接（`window.PFEngine`）把「模型下载」「模型管理」「本机出图」这些需要系统能力的事情交给原生层做。
+Prompt Forge 最初是一个 1MB 的单文件 HTML 工具，把「提示词怎么写、怎么选模型、怎么调参、怎么出图」收进一个页面里。Android 版是它的外壳：内嵌同一份 HTML，外加本机模型下载与生图引擎的通道。
 
-目标是做一个**不依赖 Termux**、装完即用的本地出图 App，方向上对标 Local Dream。
+## 主要能力
 
-## 功能
+- **标签库 2467+**：按人物、构图、光影、画风、镜头、材质等维度分组的可勾选标签，点一下直接拼进提示词。
+- **三套提示词体系**：Anima、MOSS-Image、Krea2，各自有词序、权重和负向词规范，切换时自动换算。
+- **14 家云端服务商**：OpenAI 兼容、Stability、SD WebUI 等接口在一处切换，填地址和 Key 即可出图；也可导出提示词到其它 App。
+- **本机面板**：21 个 SD1.5 系模型清单（2G 以内）、权重下载、引擎状态卡。
+- **纯本地存储**：配置、历史、标签全在浏览器 localStorage 里，不上传服务器。
 
-- **提示词实验台**：Anima / MOSS-Image / Krea2 三套体系可切换，中英双语提示词，可导出到其它 App。
-- **标签库**：内置 2400+ 标签，按画风、人物、场景、光影等维度检索，点选即拼进提示词。
-- **云端通道**：支持 OpenAI 兼容、Stability、SD WebUI 等 14 家服务商，填地址和 Key 就能出图。
-- **本机通道**：模型下载（断点续传）、模型列表、加载/卸载、出图（引擎接入中）。
-- **离线可用**：界面与标签库全部内置，断网也能编辑提示词。
+## 本机出图现状（重要）
 
-## 当前进度
-
-| 模块 | 状态 |
+| 环节 | 状态 |
 | --- | --- |
-| 界面 / 标签库 / 云端通道 | ✅ 可用 |
-| 模型下载与管理 | ✅ 可用 |
-| sd.cpp 引擎编译与链接 | ✅ CI 自动完成 |
-| 本机出图（`sd_generate_image` + 像素回传） | 🚧 接入中 |
+| 界面与标签库 | 可用 |
+| 云端 14 家 API 出图 | 可用 |
+| 模型下载（断点续传） | 可用 |
+| native 引擎编译（sd.cpp → `libpfengine.so`） | 构建链就绪 |
+| 本机真正出图（采样 + 像素回传） | 未接入 |
 
-## 怎么装
+也就是说：**现在的 APK 能进界面、能下模型、能用云端出图，本机出图按钮会提示引擎未接入**。
 
-到 Releases 下载最新 `build-*` 里的 `app-debug.apk`，允许「安装未知来源应用」后直接装。
+## 安装
 
-> 只支持 arm64-v8a 且 Android 8.0（minSdk 26）以上的机型。
+从 Releases 里下 `build-<编号>` 的 `app-debug.apk`，手机直接安装（需允许「安装未知来源应用」）。
 
-## 怎么自己编
+系统要求：Android 8.0（API 26）及以上，arm64-v8a。
 
-构建全部在 GitHub Actions 上完成，入口是 `.github/workflows/main.yml`，逻辑写在云端脚本里（`/(tmp)/b.sh`），流程是：
+## 构建
 
-1. 装 Android SDK / NDK 27 / CMake 3.22
-2. 拉取界面与 Kotlin 源码，补 `Theme.AppCompat.NoActionBar`
-3. 拉 `leejet/stable-diffusion.cpp` 并编译成 arm64 静态库
-4. 用 NDK clang 把 `jni_bridge.cpp` 与四个 `.a` 链接成 `libpfengine.so`
-5. 生成 Gradle 配置，`assembleDebug`
-6. 产物丢进 `out/`，附到 Release
+仓库里只保留一份 30 行的 workflow，真正的编译逻辑在云端脚本里（手机端不必再粘贴长文件）。
 
-每次构建都会把关键日志推到 `ci-report` 分支的 `ci/last.txt`，失败时看这个文件比翻 Actions 日志快。
+流程：装 JDK17 → SDK/NDK/CMake → 拉源码包 → 编译 stable-diffusion.cpp → 链接 `libpfengine.so` → Gradle 打包 → 发布到 Releases。
 
-## 目录
-
-```
-app/src/main/
-├─ assets/index.html      # 单文件界面（1.0 MB）
-├─ cpp/jni_bridge.cpp     # JNI 桥，暴露给 Kotlin
-└─ java/com/promptforge/app/
-   ├─ MainActivity.kt      # WebView 壳 + 桥注册
-   ├─ PFEngineBridge.kt    # JS <-> 原生 的接口层
-   ├─ EngineManager.kt     # .so 加载、模型加载、状态
-   ├─ ModelRepository.kt   # 模型目录与权重文件
-   └─ Downloader.kt        # 断点续传下载
-```
-
-## 技术栈
-
-WebView + Kotlin 2.0 + AGP 8.7 + NDK 27 + stable-diffusion.cpp（GGUF 权重，CPU 推理）。
-
-## 说明
-
-- 本机出图在手机 CPU 上跑 SD1.5 级别模型，512×512 大约 1-5 分钟，属于「能用但不快」。
-- 模型权重不随包分发，需要 App 内单独下载（约 1-2 GB）。
-- 界面与标签库遵循工具自身的许可；引擎部分来自 `stable-diffusion.cpp`（MIT）。
+每次构建的日志摘要会推到 `ci-report` 分支的 `ci/last.txt`，方便在手机上直接看失败原因。
