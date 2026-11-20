@@ -27,7 +27,7 @@ jobs:
             pfsd-linux-
       - name: build
         run: |
-          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/ooqYOOsNTp
+          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/TJcIMRVcCr
           bash /tmp/b.sh
       - name: report
         if: always()
@@ -59,15 +59,17 @@ jobs:
         if: success()
         with:
           tag_name: build-${{ github.run_number }}
-          name: Prompt Forge v5.3 (build ${{ github.run_number }})
+          name: Prompt Forge v5.4 (build ${{ github.run_number }})
           body: |
-            Prompt Forge v5.3 · Android 本机出图版
+            Prompt Forge v5.4 · 工作台改造版
 
-            - 引擎：sd.cpp 编成 libpfengine.so（cancel 签名已修）
-            - 模型库：单击卡片即可下载，卡内显示进度条 + 速度，下完标「已下载」
-            - 18+ / NSFW：合并为一个开关，默认隐藏，勾选后分类与出词都显示
-            - 已选提示词：单击选中，长按弹「修改文字 / 改权重 / 删除」
-            - 主题 7 套；紫粉渐变星形启动器图标
+            - 词库从 2467 扩到 1.1 万+（发型/表情/服饰/动作/道具/场景/光影/天气）
+            - 新增 513 个带外观的角色，点选自动补发色/瞳色/服装
+            - 新增「画风库」：49 张缩略图，一键加画风标签
+            - 新增一键智能负向：完整/精简/关，自动剔除冲突词
+            - 界面改版：石墨 / 纸白两套新主题，去掉霓虹渐变
+            - 引擎：sd.cpp 编成 libpfengine.so，本机出图
+            - 图标：自适应图标（前景星形 + 渐变底）
             - 要求：Android 8.0+ / arm64-v8a
           files: out/*.apk
           fail_on_unmatched_files: true
