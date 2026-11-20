@@ -27,7 +27,7 @@ jobs:
             pfsd-linux-
       - name: build
         run: |
-          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/TJcIMRVcCr
+          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/cuktNEQiOl
           bash /tmp/b.sh
       - name: report
         if: always()
@@ -58,18 +58,19 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Prompt Forge v5.4 (build ${{ github.run_number }})
+          tag_name: v5.8-build-${{ github.run_number }}
+          name: Prompt Forge v5.8（构建 ${{ github.run_number }}）
           body: |
-            Prompt Forge v5.4 · 工作台改造版
+            Prompt Forge v5.8 · 模型库与设置页重组版
 
-            - 词库从 2467 扩到 1.1 万+（发型/表情/服饰/动作/道具/场景/光影/天气）
-            - 新增 513 个带外观的角色，点选自动补发色/瞳色/服装
-            - 新增「画风库」：49 张缩略图，一键加画风标签
-            - 新增一键智能负向：完整/精简/关，自动剔除冲突词
-            - 界面改版：石墨 / 纸白两套新主题，去掉霓虹渐变
-            - 引擎：sd.cpp 编成 libpfengine.so，本机出图
-            - 图标：自适应图标（前景星形 + 渐变底）
+            - 设置页合并为「常规」页：主题、负向、18+、语法、数据备份集中在一处
+            - 修复「界面主题」标题被挤成竖排、18+/NSFW 行文字过窄的布局问题
+            - 18+ / NSFW 默认不勾选（首次启动自动隐藏）
+            - 模型库扩到 26 个模型，新增搜索与筛选（全部 / 能本机跑 / SD1.5 / SDXL）
+            - 下载支持暂停 / 继续 / 删除，进度条显示实时速度
+            - 下载源可选「国内镜像 hf-mirror.com」或「国外直连 huggingface.co」
+            - 新增本地离线 AI 扩写：一句中文描述扩展成完整正向标签流
+            - 导出改存到 App 私有目录并回显路径，导入支持粘贴 JSON（不再依赖文件管理器）
             - 要求：Android 8.0+ / arm64-v8a
           files: out/*.apk
           fail_on_unmatched_files: true
