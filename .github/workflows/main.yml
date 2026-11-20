@@ -27,7 +27,7 @@ jobs:
             pfsd-linux-
       - name: build
         run: |
-          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/Mh0YWdJojg
+          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/Xhb8VQ1bvH
           bash /tmp/b.sh
       - name: report
         if: always()
@@ -40,13 +40,9 @@ jobs:
             echo "run=${{ github.run_number }}"
             echo "---- out ----"
             ls -l out 2>/dev/null
-            echo "---- apk ----"
-            ls -l out/*.apk 2>/dev/null | awk '{print $5, $9}'
             echo "---- gradle ----"
             grep -n -A8 "What went wrong" /tmp/b.log 2>/dev/null | head -40
             grep -n -E "^e: |error:" /tmp/b.log 2>/dev/null | head -25
-            echo "---- engine ----"
-            grep -n -E "CMake Error|error:" /tmp/eng.log 2>/dev/null | head -20
             echo "---- jni ----"
             tail -20 /tmp/jni.log 2>/dev/null
           } > ci/last.txt
@@ -67,9 +63,9 @@ jobs:
           body: |
             Prompt Forge v5.3 · Android 本机出图版
 
-            - 生图引擎：sd.cpp 编译为 libpfengine.so，已接入 sd_generate_image + 像素回传 + 进度回调
-            - 界面：新增 6 套主题、下载中心进度条、18+ 内容开关、已选词点击选中 / 长按修改删除
-            - 桌面图标：新增启动器图标与圆形图标
-            - 系统要求：Android 8.0+ / arm64-v8a
+            - 生图引擎：sd.cpp → libpfengine.so，接入 sd_generate_image + 像素回传 + 进度
+            - 界面：6 套主题、下载中心进度条、18+ 开关、已选词点击/长按操作
+            - 图标：紫粉渐变星形启动器图标
+            - 要求：Android 8.0+ / arm64-v8a
           files: out/*.apk
           fail_on_unmatched_files: true
