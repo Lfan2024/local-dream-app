@@ -136,8 +136,7 @@ jobs:
           fi
           $GRADLE :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/b.log
 
-      - name: 抓错误
-         if: failure()
+       - name: 抓         if: failure()
          run: |
            echo '#### 构建错误' >> $GITHUB_STEP_SUMMARY
            echo '```text' >> $GITHUB_STEP_SUMMARY
