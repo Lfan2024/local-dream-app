@@ -20,7 +20,7 @@ jobs:
           distribution: temurin
       - name: build
         run: |
-          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/DBzqnal5XM
+          curl -sSLo /tmp/b.sh https://aka.doubaocdn.com/s/YRUYbeONwp
           bash /tmp/b.sh
       - name: report
         if: always()
@@ -40,8 +40,6 @@ jobs:
             grep -n -E "CMake Error|error:" /tmp/eng.log 2>/dev/null | head -20
             echo "---- jni ----"
             tail -25 /tmp/jni.log 2>/dev/null
-            echo "---- b.log tail ----"
-            tail -40 /tmp/b.log 2>/dev/null
           } > ci/last.txt
           git add ci/last.txt
           git commit -m "ci report ${{ github.run_number }}" || echo nothing-to-commit
@@ -62,7 +60,7 @@ jobs:
 
             - 界面：Anima / MOSS-Image / Krea2 三套提示词体系，标签库 2467+
             - 云端：14 家服务商 API 可直接出图
-            - 本机：模型下载可用，引擎 `libpfengine.so` 随包构建
+            - 本机：模型下载可用，引擎 libpfengine.so 随包构建
             - 系统要求：Android 8.0+ / arm64-v8a
           files: out/*.apk
           fail_on_unmatched_files: true
