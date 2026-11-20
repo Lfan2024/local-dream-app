@@ -1,10 +1,11 @@
 name: Build PFNative
+
 permissions:
   contents: write
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -15,82 +16,60 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup JDK 17
+      - name: 1 JDK17
         uses: actions/setup-java@v5
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: temurin
 
-      - name: Install SDK + NDK
+      - name: 2 SDK
         run: |
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          cd $ANDROID_SDK_ROOT/cmdline-tools
+          set -e
+          SDK=$ANDROID_SDK_ROOT
+          mkdir -p $SDK/cmdline-tools
+          cd $SDK/cmdline-tools
           curl -sSLo c.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
-          unzip -q c.zip
-          mv cmdline-tools latest
-          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          unzip -q -o c.zip
+          if [ ! -d latest ]; then mv cmdline-tools latest; fi
+          export PATH=$SDK/cmdline-tools/latest/bin:$PATH
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;27.0.12077973" "cmake;3.22.1" > /tmp/sdk.log 2>&1
+          echo "SDK_EXIT=$?" >> $GITHUB_STEP_SUMMARY
 
-      - name: 拉取源码
+      - name: 3 源码
         run: |
           curl -sSLo /tmp/src.zip https://aka.doubaocdn.com/s/DcdM87LsyL
-          rm -rf app/src/main
-          mkdir -p app/src/main
-          unzip -q /tmp/src.zip -d /tmp/src
-          cp -r /tmp/src/main/* app/src/main/
-          cp -r /tmp/src/cpp app/src/main/ 2>/dev/null || cp -r /tmp/src/main/cpp app/src/main/ 2>/dev/null || true
-          mkdir -p app/src/main/cpp app/src/main/assets
-          cp /tmp/src/assets/index.html app/src/main/assets/ 2>/dev/null || true
-          cp /tmp/src/AndroidManifest.xml app/src/main/ 2>/dev/null || true
-          python3 - <<'PY'
-          p="app/src/main/AndroidManifest.xml"
-          import os
-          if os.path.exists(p):
-              s=open(p).read()
-              if "android:theme" not in s:
-                  s=s.replace("<application", '<application\n        android:theme="@style/Theme.AppCompat.NoActionBar"',1)
-                  open(p,"w").write(s)
-          else:
-              os.makedirs("app/src/main", exist_ok=True)
-              open(p,"w").write('<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n'
-                  '    <uses-permission android:name="android.permission.INTERNET"/>\n'
-                  '    <application android:label="PromptForge" android:theme="@style/Theme.AppCompat.NoActionBar">\n'
-                  '        <activity android:name=".MainActivity" android:exported="true">\n'
-                  '            <intent-filter>\n'
-                  '                <action android:name="android.intent.action.MAIN"/>\n'
-                  '                <category android:name="android.intent.category.LAUNCHER"/>\n'
-                  '            </intent-filter>\n'
-                  '        </activity>\n'
-                  '    </application>\n'
-                  '</manifest>\n')
-          PY
-          ls -R app/src/main | head -20 >> $GITHUB_STEP_SUMMARY
+          rm -rf /tmp/src
+          unzip -q -o /tmp/src.zip -d /tmp/src
+          mkdir -p app/src/main/java/com/promptforge/app app/src/main/cpp app/src/main/assets
+          find /tmp/src -name "*.kt" -exec cp -f {} app/src/main/java/com/promptforge/app/ \;
+          find /tmp/src -name "jni_bridge.cpp" -exec cp -f {} app/src/main/cpp/ \;
+          find /tmp/src -name "index.html" -exec cp -f {} app/src/main/assets/ \;
+          find /tmp/src -name "AndroidManifest.xml" -exec cp -f {} app/src/main/ \;
+          perl -0pi -e 's/<application/<application\n        android:theme="\@style\/Theme.AppCompat.NoActionBar"/ unless /android:theme/' app/src/main/AndroidManifest.xml
+          ls app/src/main/java/com/promptforge/app app/src/main/cpp app/src/main/assets >> $GITHUB_STEP_SUMMARY
 
-      - name: 编引擎
+      - name: 4 引擎
         run: |
           set +e
           NDK=$ANDROID_SDK_ROOT/ndk/27.0.12077973
           export PATH=$ANDROID_SDK_ROOT/cmake/3.22.1/bin:$PATH
-          : > /tmp/eng.log
           git clone --recurse-submodules --shallow-submodules --depth 1 \
-            https://github.com/leejet/stable-diffusion.cpp /tmp/sd >> /tmp/eng.log 2>&1
-          cd /tmp/sd || true
+            https://github.com/leejet/stable-diffusion.cpp /tmp/sd > /tmp/eng.log 2>&1
+          cd /tmp/sd || exit 1
           cmake -B build -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26 \
             -DCMAKE_BUILD_TYPE=Release -DSD_BUILD_EXAMPLES=OFF >> /tmp/eng.log 2>&1
           cmake --build build -j4 >> /tmp/eng.log 2>&1
-          echo '#### 引擎' >> $GITHUB_STEP_SUMMARY
-          echo '```text' >> $GITHUB_STEP_SUMMARY
-          grep -E "CMake Error|error:" /tmp/eng.log | head -10 >> $GITHUB_STEP_SUMMARY || true
-          find build -name "*.a" >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "ENGINE_EXIT=$?" >> $GITHUB_STEP_SUMMARY
+          find build -name "*.a" >> $GITHUB_STEP_SUMMARY
 
-      - name: 链 .so
+      - name: 5 链接
         run: |
           set +e
           NDK=$ANDROID_SDK_ROOT/ndk/27.0.12077973
           CXX=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++
+          STRIP=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
           OUT=app/src/main/jniLibs/arm64-v8a
           mkdir -p $OUT
           $CXX -shared -fPIC -O2 -std=c++17 -static-libstdc++ -I/tmp/sd/include \
@@ -101,64 +80,92 @@ jobs:
             /tmp/sd/build/ggml/src/libggml-base.a \
             -o $OUT/libpfengine.so -llog -landroid -lm -lz > /tmp/jni.log 2>&1
           echo "JNI_EXIT=$?" >> $GITHUB_STEP_SUMMARY
-          grep -E "error|undefined" /tmp/jni.log | head -8 >> $GITHUB_STEP_SUMMARY || true
-          $NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded $OUT/libpfengine.so || true
+          grep -E "error|undefined reference" /tmp/jni.log | head -10 >> $GITHUB_STEP_SUMMARY
+          $STRIP --strip-unneeded $OUT/libpfengine.so 2>/dev/null
           ls -lh $OUT >> $GITHUB_STEP_SUMMARY
 
-      - name: 写 Gradle 配置
+      - name: 6 Gradle 配置
         run: |
-          python3 - <<'PY'
-          open("settings.gradle.kts","w").write('pluginManagement{repositories{google();mavenCentral();gradlePluginPortal()}}\n'
-                                               'dependencyResolutionManagement{repositories{google();mavenCentral()}}\n'
-                                               'rootProject.name="PFNative"\ninclude(":app")\n')
-          open("build.gradle.kts","w").write('plugins {\n    id("com.android.application") version "8.7.2" apply false\n    id("org.jetbrains.kotlin.android") version "2.0.21" apply false\n}\n')
-          open("app/build.gradle.kts","w").write(
-              'plugins {\n    id("com.android.application")\n    id("org.jetbrains.kotlin.android")\n}\n'
-              'android {\n    namespace = "com.promptforge.app"\n    compileSdk = 34\n'
-              '    defaultConfig {\n        applicationId = "com.promptforge.app"\n        minSdk = 26\n        targetSdk = 34\n'
-              '        versionCode = 22\n        versionName = "5.2"\n    }\n'
-              '    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n'
-              '    kotlinOptions { jvmTarget = "17" }\n}\n'
-              'dependencies {\n    implementation("androidx.core:core-ktx:1.13.1")\n    implementation("androidx.appcompat:appcompat:1.7.0")\n}\n')
-          import os
-          open("local.properties","w").write("sdk.dir=" + os.environ["ANDROID_SDK_ROOT"] + "\n")
-          open("gradle.properties","w").write("org.gradle.jvmargs=-Xmx2048m\nandroid.useAndroidX=true\n")
-          PY
+          printf '%s\n' \
+          'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }' \
+          'dependencyResolutionManagement { repositories { google(); mavenCentral() } }' \
+          'rootProject.name = "PFNative"' \
+          'include(":app")' > settings.gradle.kts
 
-      - name: Build
+          printf '%s\n' \
+          'plugins {' \
+          '    id("com.android.application") version "8.7.2" apply false' \
+          '    id("org.jetbrains.kotlin.android") version "2.0.21" apply false' \
+          '}' > build.gradle.kts
+
+          printf '%s\n' \
+          'plugins {' \
+          '    id("com.android.application")' \
+          '    id("org.jetbrains.kotlin.android")' \
+          '}' \
+          'android {' \
+          '    namespace = "com.promptforge.app"' \
+          '    compileSdk = 34' \
+          '    defaultConfig {' \
+          '        applicationId = "com.promptforge.app"' \
+          '        minSdk = 26' \
+          '        targetSdk = 34' \
+          '        versionCode = 22' \
+          '        versionName = "5.2"' \
+          '    }' \
+          '    compileOptions {' \
+          '        sourceCompatibility = JavaVersion.VERSION_17' \
+          '        targetCompatibility = JavaVersion.VERSION_17' \
+          '    }' \
+          '    kotlinOptions { jvmTarget = "17" }' \
+          '}' \
+          'dependencies {' \
+          '    implementation("androidx.core:core-ktx:1.13.1")' \
+          '    implementation("androidx.appcompat:appcompat:1.7.0")' \
+          '}' > app/build.gradle.kts
+
+          printf '%s\n' \
+          'org.gradle.jvmargs=-Xmx2048m' \
+          'android.useAndroidX=true' > gradle.properties
+
+          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > local.properties
+
+      - name: 7 打包
         run: |
           set -o pipefail
-          GRADLE=$(command -v gradle || true)
+          GRADLE=$(command -v gradle)
           if [ -z "$GRADLE" ]; then
             curl -sSLo /tmp/g.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
-            unzip -q /tmp/g.zip -d /tmp
+            unzip -q -o /tmp/g.zip -d /tmp
             GRADLE=/tmp/gradle-8.10.2/bin/gradle
           fi
-          $GRADLE :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/b.log
+          "$GRADLE" :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/b.log
 
-       - name: 抓         if: failure()
-         run: |
-           echo '#### 构建错误' >> $GITHUB_STEP_SUMMARY
-           echo '```text' >> $GITHUB_STEP_SUMMARY
-           grep -n -A6 "What went wrong" /tmp/b.log | head -30 >> $GITHUB_STEP_SUMMARY || true
-           grep -n -E "^e: " /tmp/b.log | head -10 | cut -c1-150 >> $GITHUB_STEP_SUMMARY || true
-           echo '```' >> $GITHUB_STEP_SUMMARY
-       - name: 收集APK
-         if: always()
-         run: |
-           mkdir -p out
-           find . -name "*.apk" -not -path "./.git/*" -exec cp {} out/ \;
-           ls -lh out >> $GITHUB_STEP_SUMMARY || true
-       - name: 上传
-         if: always()
-         uses: actions/upload-artifact@v4
-         with:
-           name: pf-apk
-           path: out/
-           if-no-files-found: warn
-       - name: 发Release
-         if: success()
-         uses: softprops/action-gh-release@v2
-         with:
-           tag_name: build-${{ github.run_number }}
-           files: out/*.apk
+      - name: 8 报错摘要
+        if: failure()
+        run: |
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          grep -n -A6 "What went wrong" /tmp/b.log | head -30 >> $GITHUB_STEP_SUMMARY
+          grep -n -E "^e: " /tmp/b.log | head -12 >> $GITHUB_STEP_SUMMARY
+          grep -n -E "CMake Error|error:" /tmp/eng.log | head -12 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: 9 收集产物
+        if: always()
+        run: |
+          mkdir -p out
+          find . -name "*.apk" -not -path "./.git/*" -exec cp {} out/ \;
+          ls -lh out >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pf-apk
+          path: out/
+          if-no-files-found: warn
+
+      - uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: build-${{ github.run_number }}
+          files: out/*.apk
